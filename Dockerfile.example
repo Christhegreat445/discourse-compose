@@ -1,0 +1,53 @@
+# Multi-stage Dockerfile for Discourse with optimized caching
+
+# Stage 1: Builder
+FROM ruby:3.2-slim as builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Gemfile first for better layer caching
+COPY Gemfile Gemfile.lock ./
+
+# Bundle install without development/test gems
+RUN bundle install --jobs 4 --retry 3 --without development test
+
+# Stage 2: Runtime
+FROM ruby:3.2-slim
+
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy bundled gems from builder
+COPY --from=builder /usr/local/bundle /usr/local/bundle
+
+# Copy application code
+COPY . .
+
+# Set environment
+ENV RAILS_ENV=production \
+    BUNDLE_WITHOUT=development:test
+
+# Create non-root user
+RUN useradd -m -s /bin/bash discourse && \
+    chown -R discourse:discourse /app
+
+USER discourse
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+    CMD bundle exec rails health:ready || exit 1
+
+EXPOSE 3000
+
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0"]

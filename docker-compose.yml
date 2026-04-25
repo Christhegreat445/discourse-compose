@@ -1,0 +1,43 @@
+services:
+  web:
+    image: discourse/discourse:latest
+    ports:
+      - "8080:80"
+    environment:
+      - DISCOURSE_HOSTNAME=localhost
+      - DISCOURSE_DB_HOST=postgres
+      - DISCOURSE_REDIS_HOST=redis
+      - DISCOURSE_DB_USERNAME=discourse
+      - DISCOURSE_DB_PASSWORD=secret
+      - DISCOURSE_DB_NAME=discourse
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=discourse
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=discourse
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    volumes:
+      - ./redis-data:/data
+
+  sidekiq:
+    image: discourse/discourse:latest
+    command: bundle exec sidekiq
+    environment:
+      - DISCOURSE_HOSTNAME=localhost
+      - DISCOURSE_DB_HOST=postgres
+      - DISCOURSE_REDIS_HOST=redis
+      - DISCOURSE_DB_USERNAME=discourse
+      - DISCOURSE_DB_PASSWORD=secret
+      - DISCOURSE_DB_NAME=discourse
+    depends_on:
+      - postgres
+      - redis
